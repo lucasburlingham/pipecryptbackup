@@ -10,3 +10,6 @@ rust-ini = "0.21.1"
 sysinfo = "0.32.0"
 whoami = "1.5.2"
 aes-gcm = "0.10.1"
+gtk = { version = "0.9.2", package = "gtk4" }
+rand = "0.8.5"
+typenum = "1.17.0"
