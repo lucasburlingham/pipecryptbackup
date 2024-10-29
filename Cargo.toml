@@ -1,0 +1,12 @@
+[package]
+name = "pipecryptbackup"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+colored = "2.1.0"
+aead = "0.5.2"
+rust-ini = "0.21.1"
+sysinfo = "0.32.0"
+whoami = "1.5.2"
+aes-gcm = "0.10.1"
