@@ -1,24 +1,37 @@
-use aead::{ Aead, KeyInit, OsRng };
-use aead::generic_array::typenum::U32; // Assuming a 256-bit key size (32 bytes)
-use aes_gcm::{ Aes256Gcm, Key, Nonce };
-use aes_gcm::aead::generic_array::GenericArray;
+use aead::{ Aead, KeyInit };
+use aes_gcm::{ Aes256Gcm };
 use std::fs::File;
 use std::io::{ self, Read, Write, BufReader, BufWriter };
 use std::path::Path;
+use rand::rngs::OsRng;
+use rand::RngCore;
+use typenum::{U32, U12};
 
-pub fn encrypt(plaintext: &[u8], key: &[u8], nonce: &[u8]) -> Vec<u8> {
-    let key = Key::from_slice(key);
+use aead::generic_array;
+use generic_array::GenericArray;
+
+// Get the key and nonse if it exists, otherwise generate a new one
+pub fn get_key_nonce(key_path: &Path, nonce_path: &Path) -> (GenericArray<u8, U32>, GenericArray<u8, U12>) {
+	if key_path.exists() && nonce_path.exists() {
+		let (key, nonce) = load_key_nonce(key_path).expect("Failed to load key and nonce");
+		(GenericArray::clone_from_slice(&key), GenericArray::clone_from_slice(&nonce))
+	} else {
+		let (key, nonce) = generate_key_nonce();
+		store_key_nonce(&key, &nonce, key_path).expect("Failed to store key and nonce");
+		(key, nonce)
+	}
+}
+
+
+
+// Use the `U32` and `U12` from `typenum` as the size for key and nonce
+pub fn encrypt(plaintext: &[u8], key: &GenericArray<u8, U32>, nonce: &GenericArray<u8, U12>) -> Vec<u8> {
     let cipher = Aes256Gcm::new(key);
-
-    let nonce = Nonce::from_slice(nonce); // 96-bits; unique per message
     cipher.encrypt(nonce, plaintext).expect("encryption failure!")
 }
 
-pub fn decrypt(ciphertext: &[u8], key: &[u8], nonce: &[u8]) -> Vec<u8> {
-    let key = Key::from_slice(key);
+pub fn decrypt(ciphertext: &[u8], key: &GenericArray<u8, U32>, nonce: &GenericArray<u8, U12>) -> Vec<u8> {
     let cipher = Aes256Gcm::new(key);
-
-    let nonce = Nonce::from_slice(nonce); // 96-bits; unique per message
     cipher.decrypt(nonce, ciphertext).expect("decryption failure!")
 }
 
@@ -39,7 +52,7 @@ pub fn encrypt_file(
         if bytes_read == 0 {
             break;
         }
-        let encrypted_chunk = encrypt(&buffer[..bytes_read], key, nonce);
+        let encrypted_chunk = encrypt(&buffer[..bytes_read], key.into(), nonce.into());
         writer.write_all(&encrypted_chunk)?;
     }
 
@@ -63,8 +76,12 @@ pub fn load_key_nonce(path: &Path) -> io::Result<(Vec<u8>, Vec<u8>)> {
     Ok((key, nonce))
 }
 
-pub fn generate_key_nonce() -> (Vec<u8>, Vec<u8>) {
-    let key: &[u8] = GenericArray::generate(|_| OsRng); // Generate a random key
-    let nonce = GenericArray::generate(|_| OsRng); // Generate a random nonce
-    (key.to_vec(), nonce.to_vec())
+pub fn generate_key_nonce() -> (GenericArray<u8, U32>, GenericArray<u8, U12>) {
+    let mut key = GenericArray::default(); // Default to zeroed array
+    let mut nonce = GenericArray::default();
+
+    OsRng.fill_bytes(key.as_mut()); // Fill key with random bytes
+    OsRng.fill_bytes(nonce.as_mut()); // Fill nonce with random bytes
+
+    (key, nonce)
 }
